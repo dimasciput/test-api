@@ -1,0 +1,506 @@
+openapi: 3.0.0
+info:
+  title: Water Monitoring and Analysis API
+  version: 1.0.0
+  description: >
+    This API provides endpoints for Water Quantity and Quality Monitoring, 
+    Water Surface Area Extent and Altimeter Estimation, and Water Quality/Eutrophication 
+    analysis. It includes functionality for fetching and storing data, calculating indices 
+    (e.g., AWEIsh, NDTI), and returning various water-related metrics.
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production server
+
+tags:
+  - name: Data Acquisition
+    description: Endpoints for fetching and saving data
+  - name: Data Overview
+    description: Endpoints for returning overviews of stored data
+  - name: Water Surface Analysis
+    description: Endpoints for water surface area and altimeter estimation
+  - name: Water Quality
+    description: Endpoints for water pollution, eutrophication, and turbidity
+  - name: Index Calculations
+    description: Endpoints that return calculations such as NDTI
+
+paths:
+
+  #############################
+  # 1) Data Acquisition
+  #############################
+  /libraries/fetch:
+    get:
+      tags:
+        - Data Acquisition
+      summary: Fetch and store data from external libraries
+      description: >
+        Retrieves data from a configured list of libraries/URLs and stores the resulting 
+        information in the database.
+      parameters:
+        - name: source
+          in: query
+          description: Optional filter to fetch data only from a specific source library
+          required: false
+          schema:
+            type: string
+            example: "libraryA"
+      responses:
+        '200':
+          description: Data successfully fetched and stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Data fetched and saved successfully."
+                  fetched_sources:
+                    type: array
+                    items:
+                      type: string
+                    example: ["libraryA", "libraryB"]
+                  total_records:
+                    type: integer
+                    example: 120
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid parameters provided."
+        '404':
+          description: No data sources found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "No libraries configured for data fetching."
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "An unexpected error occurred."
+
+  #############################
+  # 2) Data Overview
+  #############################
+  /data/overview:
+    get:
+      tags:
+        - Data Overview
+      summary: Overview of all saved data
+      description: >
+        Returns an overview of all currently stored water data, including quantity 
+        and quality metrics, timestamps, and sources.
+      parameters: []
+      responses:
+        '200':
+          description: Overview of all stored data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_data_points:
+                    type: integer
+                    example: 254
+                  data_sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        source_name:
+                          type: string
+                        record_count:
+                          type: integer
+                      example:
+                        - source_name: "LibraryA"
+                          record_count: 150
+                        - source_name: "LibraryB"
+                          record_count: 104
+                  latest_entries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        timestamp:
+                          type: string
+                        value:
+                          type: number
+                      example:
+                        - id: 1
+                          timestamp: "2025-01-01T12:34:56Z"
+                          value: 34.2
+        '400':
+          description: Bad Request
+        '500':
+          description: Internal Server Error
+
+  #############################
+  # 3) Water Surface Analysis
+  #############################
+  /water-surface-mask:
+    get:
+      tags:
+        - Water Surface Analysis
+      summary: Retrieve water mask
+      description: >
+        Returns a binary water mask used for extraction of river, lake, and reservoir 
+        boundaries. The mask identifies water pixels from non-water pixels.
+      parameters:
+        - name: region
+          in: query
+          description: Region or bounding box to retrieve the mask for
+          required: false
+          schema:
+            type: string
+            example: "34.76,-1.29,36.12,-0.55"
+        - name: date
+          in: query
+          description: Date or date range for the water mask retrieval
+          required: false
+          schema:
+            type: string
+            example: "2025-01-01"
+      responses:
+        '200':
+          description: Water mask retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mask_id:
+                    type: string
+                    example: "mask_12345"
+                  region:
+                    type: string
+                    example: "34.76,-1.29,36.12,-0.55"
+                  date:
+                    type: string
+                    example: "2025-01-01"
+                  mask_url:
+                    type: string
+                    example: "https://example.com/water_mask_12345.png"
+        '400':
+          description: Bad Request
+        '404':
+          description: Water mask not found for the specified parameters
+        '500':
+          description: Internal Server Error
+
+  /water-surface-area:
+    get:
+      tags:
+        - Water Surface Analysis
+      summary: Calculate water area extent
+      description: >
+        Returns the calculated water area extent for a given region or bounding box. 
+        Internally may use the AWEIsh calculation (BLUE + 2.5×GREEN - 1.5×(NIR + SWIR1) - 0.25×SWIR2).
+      parameters:
+        - name: region
+          in: query
+          description: Region or bounding box to calculate the water area for
+          required: false
+          schema:
+            type: string
+            example: "34.76,-1.29,36.12,-0.55"
+        - name: date
+          in: query
+          description: Date or date range for the area calculation
+          required: false
+          schema:
+            type: string
+            example: "2025-01-01"
+      responses:
+        '200':
+          description: Water area extent calculation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  region:
+                    type: string
+                    example: "34.76,-1.29,36.12,-0.55"
+                  date:
+                    type: string
+                    example: "2025-01-01"
+                  area_km2:
+                    type: number
+                    example: 123.45
+                  aweish_value:
+                    type: number
+                    example: 1.2345
+        '400':
+          description: Bad Request
+        '404':
+          description: Data not found for specified parameters
+        '500':
+          description: Internal Server Error
+
+  /water-raster:
+    get:
+      tags:
+        - Water Surface Analysis
+      summary: Retrieve water in raster format
+      description: >
+        Returns water data in raster format (e.g., GeoTIFF) for a given region or date. 
+        This can be used for further offline or GIS analysis.
+      parameters:
+        - name: region
+          in: query
+          description: Region or bounding box to retrieve the raster for
+          required: false
+          schema:
+            type: string
+            example: "34.76,-1.29,36.12,-0.55"
+        - name: date
+          in: query
+          description: Date or date range for the raster retrieval
+          required: false
+          schema:
+            type: string
+            example: "2025-01-01"
+      responses:
+        '200':
+          description: Water raster data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  raster_id:
+                    type: string
+                    example: "raster_67890"
+                  download_url:
+                    type: string
+                    example: "https://example.com/water_raster_67890.tif"
+                  metadata:
+                    type: object
+                    properties:
+                      resolution:
+                        type: string
+                        example: "30m"
+                      projection:
+                        type: string
+                        example: "EPSG:4326"
+        '400':
+          description: Bad Request
+        '404':
+          description: Raster not found for the specified parameters
+        '500':
+          description: Internal Server Error
+
+  #############################
+  # 4) Water Quality
+  #############################
+  /water-quality:
+    get:
+      tags:
+        - Water Quality
+      summary: Get water pollution monitoring data
+      description: >
+        Returns monitoring data related to water pollution and sedimentation in rivers, lakes, 
+        and dams.
+      parameters:
+        - name: location
+          in: query
+          description: Location or region to filter pollution data
+          required: false
+          schema:
+            type: string
+            example: "LakeExample"
+        - name: date_range
+          in: query
+          description: Specific date or date range to filter
+          required: false
+          schema:
+            type: string
+            example: "2025-01-01:2025-02-01"
+      responses:
+        '200':
+          description: Water pollution monitoring data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location:
+                    type: string
+                    example: "LakeExample"
+                  date_range:
+                    type: string
+                    example: "2025-01-01:2025-02-01"
+                  pollution_data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        timestamp:
+                          type: string
+                          example: "2025-01-15T10:00:00Z"
+                        pollution_level:
+                          type: number
+                          example: 5.1
+                        sedimentation_rate:
+                          type: number
+                          example: 0.3
+        '400':
+          description: Bad Request
+        '404':
+          description: No data found for specified parameters
+        '500':
+          description: Internal Server Error
+
+  /point-non-point-pollution:
+    get:
+      tags:
+        - Water Quality
+      summary: Get potential point and non-point source pollution
+      description: >
+        Returns potential point and non-point source pollution using calculations 
+        from the Normalised Difference Turbidity Index (NDTI).
+      parameters:
+        - name: location
+          in: query
+          description: Location or region to filter the pollution source data
+          required: false
+          schema:
+            type: string
+            example: "RiverExample"
+        - name: date
+          in: query
+          description: Date or date range for the pollution source analysis
+          required: false
+          schema:
+            type: string
+            example: "2025-01"
+      responses:
+        '200':
+          description: Potential pollution sources
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location:
+                    type: string
+                    example: "RiverExample"
+                  date:
+                    type: string
+                    example: "2025-01"
+                  point_sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        source_id:
+                          type: string
+                          example: "PS123"
+                        ndti_value:
+                          type: number
+                          example: 0.65
+                        description:
+                          type: string
+                          example: "Potential waste discharge"
+                  non_point_sources:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        region_area:
+                          type: string
+                          example: "AreaX"
+                        ndti_value:
+                          type: number
+                          example: 0.45
+                        description:
+                          type: string
+                          example: "Agricultural runoff"
+        '400':
+          description: Bad Request
+        '404':
+          description: No data found for specified parameters
+        '500':
+          description: Internal Server Error
+
+  #############################
+  # 5) Index Calculations
+  #############################
+  /ndti:
+    get:
+      tags:
+        - Index Calculations
+      summary: Get NDTI (Normalised Difference Turbidity Index) calculation
+      description: >
+        Returns NDTI values for a specified region or date. The NDTI is used to assess the 
+        turbidity of water bodies and potential pollution.
+      parameters:
+        - name: region
+          in: query
+          description: Region or bounding box for which to retrieve the NDTI
+          required: false
+          schema:
+            type: string
+            example: "34.76,-1.29,36.12,-0.55"
+        - name: date
+          in: query
+          description: Date or date range for the NDTI calculation
+          required: false
+          schema:
+            type: string
+            example: "2025-01-01"
+      responses:
+        '200':
+          description: NDTI data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  region:
+                    type: string
+                    example: "34.76,-1.29,36.12,-0.55"
+                  date:
+                    type: string
+                    example: "2025-01-01"
+                  ndti_mean:
+                    type: number
+                    example: 0.56
+                  ndti_values:
+                    type: array
+                    items:
+                      type: number
+                    example: [0.54, 0.56, 0.58]
+        '400':
+          description: Bad Request
+        '404':
+          description: No data found for the given region or date
+        '500':
+          description: Internal Server Error
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "An error message describing what went wrong."
